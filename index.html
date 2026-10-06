@@ -62,6 +62,35 @@ main{max-width:640px;margin:0 auto;padding:14px 16px calc(96px + env(safe-area-i
 .chip[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:var(--brand-ink);font-weight:600}
 .count{font-size:13px;color:var(--ink2);margin:10px 2px 8px}
 .chips.sub{padding-top:2px}
+.calbtn{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;color:var(--brand);text-decoration:none;border:1px solid var(--line);background:var(--surface);flex:none}
+.calbtn svg{width:20px;height:20px}
+.calbtn[aria-current="page"]{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.calnav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.calnav h2{margin:0;font-size:20px}
+.calnav a,.calnav button{min-width:44px;text-align:center;text-decoration:none}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .wd{font-size:12px;text-align:center;color:var(--ink2);font-weight:600;padding:2px 0}
+.cal .wd.sun,.cd.sun .n{color:var(--ng)} .cal .wd.sat,.cd.sat .n{color:var(--brand)}
+.cd{min-height:66px;border-radius:8px;background:var(--surface);border:1px solid var(--line);padding:3px;display:flex;flex-direction:column;gap:2px;cursor:pointer;text-align:left;min-width:0;font:inherit;color:inherit}
+.cd.blank{visibility:hidden}
+.cd .n{font-size:12.5px;font-weight:600;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%}
+.cd.today .n{background:var(--brand);color:var(--brand-ink)!important}
+.cd[aria-pressed="true"]{outline:2.5px solid var(--brand);outline-offset:-1px}
+.cd i{display:block;font-style:normal;font-size:10px;font-weight:700;color:#fff;border-radius:3px;padding:0 3px;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd .more{font-size:10px;color:var(--ink2);padding-left:2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:12px 2px 0;font-size:13.5px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend b{width:12px;height:12px;border-radius:3px;display:inline-block}
+.dayhead{font-size:16px;font-weight:700;margin:18px 2px 10px}
+.grp .sumbtn{margin-left:auto;margin-right:10px;font-size:12.5px;font-weight:700;color:var(--brand);text-decoration:none;border:1px solid var(--brand);border-radius:999px;padding:2px 12px}
+table.sum{font-size:13.5px}
+table.sum th,table.sum td{padding:7px 8px}
+table.sum .stick{position:sticky;left:0;background:var(--surface);z-index:1;text-align:left;max-width:130px;white-space:normal}
+table.sum td.ok{color:var(--ok)} table.sum td.ng{color:var(--ng);font-weight:700}
+table.sum td.chg{background:var(--brand-soft);font-weight:700}
+table.sum th a{color:var(--brand);text-decoration:none}
+.spark{display:block}
+.legend2{font-size:12.5px;color:var(--ink2);margin:8px 2px 0}
 .chips.sub .chip{font-size:13px;padding:4px 11px}
 .grp{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;font-weight:700;margin:18px 2px 8px;padding-bottom:4px;border-bottom:2px solid var(--brand)}
 .grp span{font-size:12.5px;font-weight:500;color:var(--ink2)}
@@ -85,6 +114,11 @@ main{max-width:640px;margin:0 auto;padding:14px 16px calc(96px + env(safe-area-i
 .pill.ok{background:var(--ok-bg);color:var(--ok);font-weight:600}
 .pill.ng{background:var(--ng-bg);color:var(--ng);font-weight:600}
 .pill.warn{background:var(--warn-bg);color:var(--warn);font-weight:600}
+.pill.st-cond{background:var(--brand-soft);color:var(--brand);font-weight:700}
+.pill.st-ok{background:var(--ok-bg);color:var(--ok);font-weight:700}
+.pill.st-hold{background:var(--warn-bg);color:var(--warn);font-weight:700}
+.pill.st-short{background:var(--ng-bg);color:var(--ng);font-weight:700}
+.tag .pill{background:rgba(255,255,255,.92)!important;vertical-align:1px}
 .empty{text-align:center;padding:48px 20px;color:var(--ink2)}
 .empty b{display:block;color:var(--ink);font-size:17px;margin-bottom:6px}
 
@@ -226,7 +260,9 @@ const DEFAULT_CONDS = `# 그룹 | 항목 | 단위
 
 const DEFAULT_DEFECTS = '웰드라인, 플로우마크, 가스마크, 싱크마크, 미성형, 버, 기포, 은줄, 이물, 스크래치, 크랙';
 const STAGES = ['T0','T1','T2','T3','T4','양산'];
-const STATUSES = ['성형완료','측정중','납품','보류','폐기'];
+const STATUSES = ['조건샷','납품','보류','미성형'];
+const STATUS_CLS = {'조건샷':'st-cond','납품':'st-ok','보류':'st-hold','미성형':'st-short'};
+const statusPill = st => st ? `<span class="pill ${STATUS_CLS[st]||''}">${esc(st)}</span>` : '';
 const LS_KEY = 'lotbook.v1';
 
 /* ---------- utils ---------- */
@@ -261,7 +297,7 @@ function parseConds(text){
 const parseList = text => (text||'').split(/[,\n]/).map(s=>s.trim()).filter(Boolean);
 const partKey = (p) => `${p.project}/${p.part}`;
 function judge(d){ if(d.value==null) return null; const lo=d.nominal+Math.min(d.minus,0), hi=d.nominal+Math.max(d.plus,0), e=1e-9; return (d.value>=lo-e&&d.value<=hi+e)?'OK':'NG'; }
-function specText(d){ const p=d.plus, m=d.minus; if(Math.abs(p)===Math.abs(m)&&p!==0) return `${fmt(d.nominal)} ±${fmt(Math.abs(p))}`; return `${fmt(d.nominal)} ${p>=0?'+':''}${fmt(p)} / ${m>0?'+':''}${fmt(m)}`; }
+function specText(d){ const p=d.plus, m=d.minus; const lo=d.nominal+Math.min(m,0), hi=d.nominal+Math.max(p,0); if(Math.abs(lo)<1e-12 && hi>0) return `${fmt(hi)} 이하`; if(Math.abs(p)===Math.abs(m)&&p!==0) return `${fmt(d.nominal)} ±${fmt(Math.abs(p))}`; return `${fmt(d.nominal)} ${p>=0?'+':''}${fmt(p)} / ${m>0?'+':''}${fmt(m)}`; }
 function yieldOf(l){ const g=l.good, n=l.ng; if(g!=null&&n!=null&&g+n>0) return g/(g+n)*100; if(g!=null&&l.shots) return g/l.shots*100; return null; }
 
 /* ---------- state & storage (IndexedDB, 이 기기에 저장) ---------- */
@@ -277,7 +313,7 @@ function cfg(){
 }
 const IDB = {
   db:null,
-  open(){ return new Promise((res,rej)=>{ const r=indexedDB.open('lotbook',1);
+  open(){ return new Promise((res,rej)=>{ const r=indexedDB.open(window.__PREVIEW__?'lotbook_preview':'lotbook',1);
     r.onupgradeneeded=()=>{ const d=r.result; d.createObjectStore('lots',{keyPath:'id'}); d.createObjectStore('photos',{keyPath:'id'}); d.createObjectStore('kv'); };
     r.onsuccess=()=>{ this.db=r.result; res(); }; r.onerror=()=>rej(r.error); }); },
   run(store, mode, fn){ return new Promise((res,rej)=>{ const t=this.db.transaction(store,mode); const out=fn(t.objectStore(store));
@@ -406,7 +442,7 @@ async function sync({silent=false}={}){
 }
 function afterSync(){
   const r=parseRoute();
-  if(r.v==='lot') return render();
+  if(r.v==='lot'||r.v==='cal'||r.v==='sum') return render();
   renderTop();
   if(r.v==='list' && $('#listBody')) listBody();
   const st=$('#connStatus'); if(st) st.textContent=connStatusText();
@@ -432,15 +468,18 @@ function parseRoute(){
   if(p[0]==='lot') return {v:'lot',id};
   if(p[0]==='edit') return {v:'form',mode:'edit',id};
   if(p[0]==='dup') return {v:'form',mode:'dup',id};
+  if(p[0]==='cal') return {v:'cal', ym:/^\d{4}-\d{2}$/.test(p[1]||'')?p[1]:null};
+  if(p[0]==='sum') return {v:'sum', project:id, part:decodeURIComponent(p[2]||'')};
   return {v:'list'};
 }
 window.addEventListener('hashchange', ()=>{ render(); window.scrollTo(0,0); });
 
 function renderTop(title, back){
   const r=parseRoute();
-  const t = title ?? ({list:'사출 LOT 기록', settings:'설정', form: r.mode==='edit'?'LOT 수정':'새 LOT', lot:'LOT 상세'}[r.v]);
-  const b = back ?? (r.v==='lot'||r.v==='form') ;
-  $('#top').innerHTML = `${b?'<button class="back" data-act="back" aria-label="뒤로">‹ 뒤로</button>':''}<h1>${esc(t)}</h1>${syncBadge()}`;
+  const t = title ?? ({list:'사출 LOT 기록', settings:'설정', form: r.mode==='edit'?'LOT 수정':'새 LOT', lot:'LOT 상세', cal:'사출 캘린더', sum:`${r.part||''} 정리`}[r.v]);
+  const b = back ?? (r.v==='lot'||r.v==='form'||r.v==='sum') ;
+  const cal = `<a class="calbtn" href="#/cal" aria-label="사출 캘린더" ${r.v==='cal'?'aria-current="page"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></a>`;
+  $('#top').innerHTML = `${b?'<button class="back" data-act="back" aria-label="뒤로">‹ 뒤로</button>':''}<h1>${esc(t)}</h1>${syncBadge()}${cal}`;
   $$('.tab').forEach(a=>a.toggleAttribute('aria-current', false));
   const cur = r.v==='list'||r.v==='lot' ? 'list' : r.v==='settings' ? 'settings' : null;
   if(cur) $(`.tab[data-tab="${cur}"]`).setAttribute('aria-current','page');
@@ -452,6 +491,8 @@ function render(){
   if(r.v==='lot') return lotView(r.id);
   if(r.v==='form') return formView(r.mode, r.id);
   if(r.v==='settings'){ settingsView(); bindSettings(); return; }
+  if(r.v==='cal') return calView(r.ym);
+  if(r.v==='sum') return sumView(r.project, r.part);
 }
 
 /* ---------- list ---------- */
@@ -474,13 +515,20 @@ function renderChips(){
   $('#pChips').innerHTML=chip('p','all','전체',S.lots.length)+projects.map(p=>chip('p',p,p,S.lots.filter(l=>(l.project||'미지정')===p).length)).join('');
   $('#sChips').innerHTML=stages.length>1?chip('s','all','전 차수')+stages.map(st=>chip('s',st,st)).join(''):'';
 }
-function lotCard(l){
+const PALETTE=['#2F6FD0','#D9822B','#2E9E6B','#B5487A','#7A5BC7','#B8931C','#1F9BAE','#C2483C','#5D7A2E','#8A5A3C'];
+function projColors(){
+  const order=[...S.lots].sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.lotNo||'').localeCompare(b.lotNo||''));
+  const m={}; let i=0; order.forEach(l=>{ const p=l.project||'미지정'; if(!(p in m)) m[p]=PALETTE[i++%PALETTE.length]; }); return m;
+}
+const sumHref=(project,part)=>`#/sum/${encodeURIComponent(project||'미지정')}/${encodeURIComponent(part||'')}`;
+function lotCard(l, colors){
   const dims=(l.dims||[]).filter(d=>d.value!=null); const ng=dims.filter(d=>judge(d)==='NG').length;
   const y=yieldOf(l);
-  return `<a class="lot" href="#/lot/${encodeURIComponent(l.id)}">
+  const col=(colors||projColors())[l.project||'미지정'];
+  return `<a class="lot" href="#/lot/${encodeURIComponent(l.id)}" style="border-left-color:${col}">
     <div class="lot-row"><span class="lot-no">${esc(l.lotNo)}</span><span class="lot-date">${esc(l.date||'')}</span></div>
     <div class="lot-meta"><span class="pill stage">${esc(l.stage||'-')}</span><span class="pill">${esc(`${l.project||''} ${l.part||''}`.trim()||'부품 미지정')}</span>
-    ${l.status?`<span class="pill ${l.status==='보류'||l.status==='폐기'?'warn':''}">${esc(l.status)}</span>`:''}
+    ${statusPill(l.status)}
     ${y!=null?`<span class="pill">수율 ${fmt(Math.round(y*10)/10)}%</span>`:''}
     ${dims.length?(ng?`<span class="pill ng">치수 NG ${ng}</span>`:`<span class="pill ok">치수 OK ${dims.length}</span>`):''}
     ${(l.photos||[]).length?`<span class="pill">사진 ${l.photos.length}</span>`:''}</div></a>`;
@@ -501,8 +549,11 @@ function listBody(){
   // 전체 탭: 프로젝트별로, 프로젝트 탭: 부품별로 묶어서 표시
   const keyOf = S.fProject==='all' ? (l=>l.project||'미지정') : (l=>l.part||'부품 미지정');
   const groups=[...new Set(items.map(keyOf))].sort();
+  const colors=projColors();
   el.innerHTML=groups.map(g=>{ const g_items=items.filter(l=>keyOf(l)===g);
-    return `<div class="grp">${esc(g)}<span>${g_items.length}건</span></div>`+g_items.map(lotCard).join(''); }).join('');
+    const btn = S.fProject!=='all' ? `<a class="sumbtn" href="${sumHref(S.fProject,g)}">정리</a>` : '';
+    const dot = S.fProject==='all' ? `<b style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${colors[g]};margin-right:6px"></b>` : '';
+    return `<div class="grp" style="${S.fProject==='all'?`border-bottom-color:${colors[g]}`:''}"><span style="font-size:14px;font-weight:700;color:var(--ink)">${dot}${esc(g)}</span>${btn}<span>${g_items.length}건</span></div>`+g_items.map(l=>lotCard(l,colors)).join(''); }).join('');
 }
 
 /* ---------- detail ---------- */
@@ -517,7 +568,7 @@ function lotView(id){
   const measured=dims.filter(d=>d.value!=null);
   $('#main').innerHTML=`
     <div class="tag"><small>LOT NO</small><div class="no">${esc(l.lotNo)}</div>
-      <div class="sub">${esc(`${l.project||''} ${l.part||''}`.trim())} ${esc(l.stage||'')} &nbsp;|&nbsp; ${esc(l.date||'')} &nbsp;|&nbsp; ${esc(l.status||'')}</div></div>
+      <div class="sub">${esc(`${l.project||''} ${l.part||''}`.trim())} ${esc(l.stage||'')} &nbsp;|&nbsp; ${esc(l.date||'')} &nbsp; ${statusPill(l.status)}</div></div>
 
     <section class="sec"><h2>기본 정보</h2><dl class="kv">
       ${kv('고객',l.customer)}${kv('재료',l.material)}${kv('재료 LOT',l.materialLot)}${kv('금형 번호',l.mold)}${kv('사출기',l.machine)}${kv('캐비티',l.cavity)}${kv('작업자',l.operator)}
@@ -567,10 +618,10 @@ function formView(mode, id){
   if(mode==='new'){
     const last=sorted()[0];
     const p = (last && c.parts.find(p=>partKey(p)===`${last.project}/${last.part}`)) || c.parts[0] || {project:'',part:'',customer:'',material:''};
-    l={ project:p.project, part:p.part, customer:p.customer, material:p.material, stage:last?.stage||'T0', status:'성형완료',
+    l={ project:p.project, part:p.part, customer:p.customer, material:p.material, stage:last?.stage||'T0', status:'조건샷',
         mold:last?.mold||'', machine:last?.machine||'', cavity:last?.cavity||'', operator:last?.operator||'' };
   }
-  if(mode!=='edit'){ Object.assign(l,{date:today(), shots:null, good:null, ng:null, defects:[], memo:'', photos:[], status:'성형완료', createdAt:null}); if(l.dims) l.dims=null; }
+  if(mode!=='edit'){ Object.assign(l,{date:today(), shots:null, good:null, ng:null, defects:[], memo:'', photos:[], status:'조건샷', createdAt:null}); if(l.dims) l.dims=null; }
   const key=`${l.project}/${l.part}`;
   F={ mode, origId: mode==='edit'?src.id:null, createdAt:l.createdAt, auto: mode!=='edit', key,
       snapKey: mode==='edit'?key:null, snapDims: mode==='edit'?(l.dims||[]):null,
@@ -594,7 +645,7 @@ function formView(mode, id){
       ${inp('date','사출일',l.date,'date')}
       <div class="f"><label for="f_part">부품</label><select id="f_part">${partOpts.map(o=>`<option value="${esc(o.k)}" ${o.k===key?'selected':''}>${esc(o.label)}</option>`).join('')}${partOpts.length?'':'<option value="/">설정에서 부품을 추가하세요</option>'}</select></div>
       <div class="f"><label for="f_stage">차수</label><select id="f_stage" name="stage">${STAGES.map(s=>`<option ${s===l.stage?'selected':''}>${s}</option>`).join('')}</select></div>
-      <div class="f"><label for="f_status">상태</label><select id="f_status" name="status">${STATUSES.map(s=>`<option ${s===l.status?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="f"><label for="f_status">상태</label><select id="f_status" name="status">${[...STATUSES, ...(l.status&&!STATUSES.includes(l.status)?[l.status]:[])].map(s=>`<option ${s===l.status?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
       ${inp('customer','고객',l.customer)}${inp('material','재료',l.material)}${inp('materialLot','재료 LOT',l.materialLot)}
       ${inp('mold','금형 번호',l.mold)}${inp('machine','사출기',l.machine)}${inp('cavity','캐비티',l.cavity)}${inp('operator','작업자',l.operator)}
     </div></section>
@@ -702,6 +753,114 @@ async function saveForm(btn){
   btn.disabled=true;
   try{ const before=F.origId?(S.lots.find(x=>x.id===F.origId)?.photos||[]):[]; await Store.saveLot(lot, F.origId); for(const p of before) if(!lot.photos.includes(p)) await delPhoto(p); toast(F.mode==='edit'?'변경을 저장했습니다':'LOT를 저장했습니다'); history.replaceState(null,'','#/lot/'+encodeURIComponent(lotNo)); render(); }
   catch(e){ btn.disabled=false; toast('저장하지 못했습니다 ('+(e?.code||'오류')+'). 다시 시도하세요'); }
+}
+
+
+/* ---------- calendar ---------- */
+const CAL={sel:null};
+const WD=['일','월','화','수','목','금','토'];
+function shiftYm(ym,n){ const [y,m]=ym.split('-').map(Number); const d=new Date(y,m-1+n,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+function calView(ym){
+  ym = ym || (CAL.sel||today()).slice(0,7);
+  const [y,m]=ym.split('-').map(Number);
+  const first=new Date(y,m-1,1).getDay(), days=new Date(y,m,0).getDate();
+  const colors=projColors();
+  const inMonth=S.lots.filter(l=>(l.date||'').startsWith(ym));
+  const byDate={}; inMonth.forEach(l=>(byDate[l.date]=byDate[l.date]||[]).push(l));
+  Object.values(byDate).forEach(a=>a.sort((p,q)=>(p.project||'').localeCompare(q.project||'')||(p.lotNo||'').localeCompare(q.lotNo||'')));
+  if(!CAL.sel || !CAL.sel.startsWith(ym)){
+    const dates=Object.keys(byDate).sort();
+    CAL.sel = today().startsWith(ym) ? today() : (dates[dates.length-1] || `${ym}-01`);
+  }
+  let cells=WD.map((w,i)=>`<div class="wd ${i===0?'sun':i===6?'sat':''}">${w}</div>`).join('');
+  for(let i=0;i<first;i++) cells+='<div class="cd blank"></div>';
+  for(let d=1; d<=days; d++){
+    const ds=`${ym}-${String(d).padStart(2,'0')}`, wd=(first+d-1)%7, ls=byDate[ds]||[];
+    const chips=ls.slice(0,3).map(l=>`<i style="background:${colors[l.project||'미지정']}" title="${esc(l.lotNo)}">${esc(l.stage||'')} ${esc((l.part||'').replace(/^LENS/i,'L'))}</i>`).join('');
+    cells+=`<button class="cd ${wd===0?'sun':wd===6?'sat':''} ${ds===today()?'today':''}" data-act="calday" data-d="${ds}" aria-pressed="${ds===CAL.sel}" aria-label="${m}월 ${d}일 사출 ${ls.length}건"><span class="n">${d}</span>${chips}${ls.length>3?`<span class="more">+${ls.length-3}</span>`:''}</button>`;
+  }
+  const projs=[...new Set(inMonth.map(l=>l.project||'미지정'))].sort();
+  const sel=(byDate[CAL.sel]||[]);
+  const sd=new Date(CAL.sel+'T00:00:00');
+  $('#main').innerHTML=`
+    <div class="calnav"><a class="btn" href="#/cal/${shiftYm(ym,-1)}" aria-label="이전 달">‹</a><h2>${y}년 ${m}월</h2><div style="display:flex;gap:6px"><button class="btn small" data-act="caltoday">오늘</button><a class="btn" href="#/cal/${shiftYm(ym,1)}" aria-label="다음 달">›</a></div></div>
+    <div class="cal">${cells}</div>
+    <div class="legend">${projs.length?projs.map(p=>`<span><b style="background:${colors[p]}"></b>${esc(p)} ${inMonth.filter(l=>(l.project||'미지정')===p).length}건</span>`).join(''):'<span style="color:var(--ink2)">이 달에는 사출 기록이 없습니다</span>'}</div>
+    <div class="dayhead">${sd.getMonth()+1}월 ${sd.getDate()}일 (${WD[sd.getDay()]}) <span style="font-weight:500;color:var(--ink2);font-size:14px">${sel.length?sel.length+'건':''}</span></div>
+    ${sel.length?sel.map(l=>lotCard(l,colors)).join(''):'<p class="help">이 날은 사출 기록이 없습니다.</p>'}`;
+}
+
+/* ---------- part summary ---------- */
+function spark(vals, lo, hi){
+  const W=96,H=28,P=3; const pts=vals.map((v,i)=>({v,i})).filter(o=>o.v!=null);
+  if(!pts.length) return '';
+  let mn=Math.min(lo,...pts.map(o=>o.v)), mx=Math.max(hi,...pts.map(o=>o.v)); if(mx===mn){ mx+=1; mn-=1; }
+  const X=i=> vals.length===1?W/2:P+i*(W-2*P)/(vals.length-1), Y=v=>H-P-(v-mn)*(H-2*P)/(mx-mn);
+  const band=`<rect x="0" y="${Y(hi).toFixed(1)}" width="${W}" height="${Math.max(1,Y(lo)-Y(hi)).toFixed(1)}" fill="var(--ok-bg)"/>`;
+  const line=pts.length>1?`<polyline points="${pts.map(o=>`${X(o.i).toFixed(1)},${Y(o.v).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--ink2)" stroke-width="1.2"/>`:'';
+  const dots=pts.map(o=>`<circle cx="${X(o.i).toFixed(1)}" cy="${Y(o.v).toFixed(1)}" r="2.6" fill="${o.v>=lo-1e-9&&o.v<=hi+1e-9?'var(--ok)':'var(--ng)'}"/>`).join('');
+  return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="추이">${band}${line}${dots}</svg>`;
+}
+function sumView(project, part){
+  const lots=S.lots.filter(l=>(l.project||'미지정')===project && l.part===part)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.lotNo||'').localeCompare(b.lotNo||''));
+  if(!lots.length){ $('#main').innerHTML='<div class="empty"><b>이 부품의 LOT가 없습니다</b></div>'; return; }
+  const color=projColors()[project];
+  const tmpl=cfg().parts.find(p=>p.project===project&&p.part===part);
+  const head=lots.map(l=>`<th><a href="#/lot/${encodeURIComponent(l.id)}" title="${esc(l.lotNo)}">${esc(l.stage||'-')}<br><span style="font-weight:500">${esc((l.date||'').slice(5).replace('-','/'))}</span></a></th>`).join('');
+  // 개요
+  const sum=k=>{ const v=lots.map(l=>l[k]).filter(x=>x!=null); return v.length?v.reduce((a,b)=>a+b,0):null; };
+  const tShots=sum('shots'), tGood=sum('good'), tNg=sum('ng');
+  const tY = (tGood!=null&&tNg!=null&&tGood+tNg>0) ? tGood/(tGood+tNg)*100 : null;
+  const stageCnt=STAGES.map(st=>[st,lots.filter(l=>l.stage===st).length]).filter(x=>x[1]).map(x=>`${x[0]} ${x[1]}`).join(', ');
+  const kv=(k,v)=>v!=null&&v!==''?`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`:'';
+  // 치수
+  const names=[...(tmpl?tmpl.dims.map(d=>d.name):[])]; lots.forEach(l=>(l.dims||[]).forEach(d=>{ if(d.value!=null && !names.includes(d.name)) names.push(d.name); }));
+  const dimRows=names.map(n=>{
+    const per=lots.map(l=>(l.dims||[]).find(d=>d.name===n));
+    if(!per.some(d=>d&&d.value!=null)) return '';
+    const ref=[...per].reverse().find(d=>d)||tmpl?.dims.find(d=>d.name===n);
+    const lo=ref.nominal+Math.min(ref.minus,0), hi=ref.nominal+Math.max(ref.plus,0);
+    return `<tr><td class="stick"><b>${esc(n)}</b><br><span style="color:var(--ink2);font-size:12px">${esc(specText(ref))}</span></td>${per.map(d=>{ if(!d||d.value==null) return '<td style="color:var(--ink2)">–</td>'; const j=judge(d); return `<td class="${j==='NG'?'ng':'ok'}">${fmt(d.value)}</td>`; }).join('')}<td>${spark(per.map(d=>d?d.value:null),lo,hi)}</td></tr>`;
+  }).join('');
+  // 성형조건
+  const clabels=[...cfg().conds.map(c=>c.l)]; lots.forEach(l=>(l.cond||[]).forEach(c=>{ if(!clabels.includes(c.l)) clabels.push(c.l); }));
+  const condRows=clabels.map(lb=>{
+    const vals=lots.map(l=>(l.cond||[]).find(c=>c.l===lb));
+    if(!vals.some(Boolean)) return '';
+    const unit=(vals.find(Boolean)||{}).u||'';
+    let prev=null;
+    return `<tr><td class="stick"><b>${esc(lb)}</b>${unit?` <span style="color:var(--ink2);font-size:12px">${esc(unit)}</span>`:''}</td>${vals.map(c=>{ const v=c?c.v:''; const chg= v!=='' && prev!==null && v!==prev; if(v!=='') prev=v; return `<td class="${chg?'chg':''}">${v!==''?esc(v):'<span style="color:var(--ink2)">–</span>'}</td>`; }).join('')}</tr>`;
+  }).join('');
+  // 불량
+  const dcount={}; lots.forEach(l=>(l.defects||[]).forEach(d=>dcount[d]=(dcount[d]||0)+1));
+  const defects=Object.entries(dcount).sort((a,b)=>b[1]-a[1]);
+  const memos=lots.filter(l=>(l.memo||'').trim());
+  $('#main').innerHTML=`
+    <div class="tag" style="background:${color}"><small>${esc(project)}</small><div class="no">${esc(part)} 정리</div>
+      <div class="sub">LOT ${lots.length}건 &nbsp;|&nbsp; ${esc(lots[0].date)} ~ ${esc(lots[lots.length-1].date)}</div></div>
+
+    <section class="sec"><h2>개요</h2><dl class="kv">
+      ${kv('고객',lots[lots.length-1].customer)}${kv('재료',lots[lots.length-1].material)}${kv('차수 구성',stageCnt)}${kv('최근 상태',lots[lots.length-1].status)}
+      ${kv('총 쇼트',tShots)}${kv('양품 합계',tGood)}${kv('불량 합계',tNg)}${kv('전체 수율',tY!=null?fmt(Math.round(tY*10)/10)+'%':null)}
+    </dl></section>
+
+    <section class="sec"><h2>LOT 이력</h2><div class="scroll"><table class="sum"><thead><tr><th class="stick">LOT</th><th>사출일</th><th>차수</th><th>상태</th><th>수율</th><th>치수 NG</th></tr></thead><tbody>
+      ${lots.map(l=>{ const ds=(l.dims||[]).filter(d=>d.value!=null), ng=ds.filter(d=>judge(d)==='NG').length, y=yieldOf(l);
+        return `<tr><td class="stick"><a href="#/lot/${encodeURIComponent(l.id)}" style="color:var(--brand);font-weight:600;text-decoration:none">${esc(l.lotNo)}</a></td><td>${esc(l.date||'')}</td><td>${esc(l.stage||'')}</td><td>${statusPill(l.status)}</td><td>${y!=null?fmt(Math.round(y*10)/10)+'%':'–'}</td><td class="${ds.length?(ng?'ng':'ok'):''}">${ds.length?`${ng} / ${ds.length}`:'–'}</td></tr>`; }).join('')}
+    </tbody></table></div></section>
+
+    ${dimRows?`<section class="sec"><h2>치수 추이</h2><div class="scroll"><table class="sum"><thead><tr><th class="stick">항목 / 규격</th>${head}<th>추이</th></tr></thead><tbody>${dimRows}</tbody></table></div>
+      <p class="legend2">초록 = 규격 안, 빨강 = 규격 밖. 추이 그래프의 연한 초록 띠가 공차 범위입니다. 판정은 각 LOT 저장 당시의 규격 기준입니다.</p></section>`:''}
+
+    ${condRows?`<section class="sec"><h2>성형 조건 비교</h2><div class="scroll"><table class="sum"><thead><tr><th class="stick">항목</th>${head}</tr></thead><tbody>${condRows}</tbody></table></div>
+      <p class="legend2">색이 칠해진 칸은 직전 LOT에서 값이 바뀐 곳입니다.</p></section>`:''}
+
+    ${defects.length?`<section class="sec"><h2>불량 유형 빈도</h2><div class="lot-meta" style="margin-top:0">${defects.map(([d,n])=>`<span class="pill ng">${esc(d)} ${n} / ${lots.length} LOT</span>`).join('')}</div></section>`:''}
+
+    ${memos.length?`<section class="sec"><h2>메모 이력</h2>${memos.map(l=>`<div style="padding:8px 0;border-top:1px solid var(--line)"><div style="font-size:13px;color:var(--ink2);font-weight:600">${esc(l.stage||'')} &nbsp;${esc(l.date||'')} &nbsp;${esc(l.lotNo)}</div><p class="memo" style="margin-top:2px">${esc(l.memo)}</p></div>`).join('')}</section>`:''}
+
+    <button class="btn wide" data-act="sumcsv">이 부품 LOT 전체 CSV 내보내기</button>`;
 }
 
 /* ---------- settings ---------- */
@@ -823,8 +982,8 @@ async function saveSettings(btn){
   catch(e){ toast('설정을 저장하지 못했습니다'); }
   btn.disabled=false;
 }
-async function exportCsv(){
-  const lots=sorted().reverse();
+async function exportCsv(subset, label){
+  const lots=(subset||sorted()).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.lotNo||'').localeCompare(b.lotNo||''));
   const condCols=[...new Set(lots.flatMap(l=>(l.cond||[]).map(c=>c.l)))];
   const dimCols=[...new Set(lots.flatMap(l=>(l.dims||[]).filter(d=>d.value!=null).map(d=>d.name)))];
   const head=['LOT','사출일','프로젝트','부품','차수','상태','고객','재료','재료LOT','금형','사출기','캐비티','작업자','총쇼트','양품','불량','수율(%)','불량유형',...condCols,...dimCols,'치수NG항목','메모'];
@@ -835,7 +994,7 @@ async function exportCsv(){
       (l.dims||[]).filter(d=>judge(d)==='NG').map(d=>d.name).join('/'), l.memo];
   });
   const csv='\uFEFF'+[head,...rows].map(r=>r.map(q).join(',')).join('\r\n');
-  saveFile(`사출LOT_${today()}.csv`, new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  saveFile(`사출LOT_${label?label+'_':''}${today()}.csv`, new Blob([csv],{type:'text/csv;charset=utf-8'}));
 }
 
 /* ---------- events ---------- */
@@ -856,16 +1015,29 @@ document.addEventListener('click', async e=>{
   else if(a==='savesettings') saveSettings(b);
   else if(a.startsWith('se-')) seAction(a,b);
   else if(a==='csv') exportCsv();
+  else if(a==='sumcsv'){ const r=parseRoute(); exportCsv(S.lots.filter(l=>(l.project||'미지정')===r.project&&l.part===r.part), `${r.project}_${r.part}`); }
+  else if(a==='calday'){ CAL.sel=b.dataset.d; calView(parseRoute().ym); }
+  else if(a==='caltoday'){ CAL.sel=today(); location.hash='#/cal/'+today().slice(0,7); }
   else if(a==='backup') exportBackup();
   else if(a==='sync'||a==='syncnow'){ if(!S.conn.url){ toast('설정에서 PC 서버 주소를 먼저 입력하세요'); return; } sync({silent:false}); }
   else if(a==='conntest') connTest(b);
 });
 
 (async()=>{
-  try{ await IDB.open(); await Store.load(); }
+  try{
+    await IDB.open();
+    if(window.__PREVIEW__){   // 미리보기: 매번 첨부 데이터로 초기화
+      for(const st of ['lots','photos','kv']) await IDB.run(st,'readwrite',s=>s.clear());
+      const P=window.__PREVIEW__;
+      for(const ph of (P.photos||[])) await IDB.put('photos',{id:ph.id,type:ph.type,blob:b64ToBlob(ph.data,ph.type||'image/jpeg')});
+      for(const l of P.lots) await IDB.put('lots',{...l,id:l.lotNo});
+      if(P.settings) await IDB.put('kv',P.settings,'settings');
+    }
+    await Store.load();
+  }
   catch(e){ $('#main').innerHTML='<div class="empty"><b>저장소를 열 수 없습니다</b>사생활 보호(시크릿) 모드에서는 저장이 되지 않습니다. 일반 모드로 열어주세요.</div>'; return; }
   S.conn=(await IDB.get('kv','conn'))||{};
-  if(!S.conn.url && location.protocol==='https:' && !/github\.io$/.test(location.hostname)){
+  if(!window.__PREVIEW__ && !S.conn.url && location.protocol==='https:' && !/github\.io$/.test(location.hostname)){
     try{ const r=await fetch('/api/ping',{cache:'no-store'}); if(r.ok) await saveConn({url:location.origin}); }catch(e){}
   }
   render(); cleanupPhotos();
@@ -874,7 +1046,7 @@ document.addEventListener('click', async e=>{
   window.addEventListener('online',()=>sync({silent:true}));
   try{ if(navigator.storage?.persist) S.persisted = await navigator.storage.persisted() || await navigator.storage.persist(); }catch(e){}
 })();
-if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+if(!window.__PREVIEW__ && 'serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
 </html>
