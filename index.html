@@ -61,6 +61,20 @@ main{max-width:640px;margin:0 auto;padding:14px 16px calc(96px + env(safe-area-i
 .chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;font-size:14px;cursor:pointer;white-space:nowrap}
 .chip[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:var(--brand-ink);font-weight:600}
 .count{font-size:13px;color:var(--ink2);margin:10px 2px 8px}
+.chips.sub{padding-top:2px}
+.chips.sub .chip{font-size:13px;padding:4px 11px}
+.grp{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;font-weight:700;margin:18px 2px 8px;padding-bottom:4px;border-bottom:2px solid var(--brand)}
+.grp span{font-size:12.5px;font-weight:500;color:var(--ink2)}
+.pblock{border:1px solid var(--line);border-radius:var(--radius-s);padding:12px;margin-bottom:12px;background:var(--bg)}
+.pblock .grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+.pblock .f input{background:var(--surface)}
+.tbl{min-width:430px;margin-top:10px}
+.tbl th{text-align:left;padding:6px 4px;background:var(--sunk);color:var(--ink);font-size:12.5px}
+.tbl td{padding:3px 3px;text-align:left}
+.tbl input{width:100%;min-width:0;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:15px;min-height:38px}
+.tbl input.n{text-align:right}
+.tbl .rm{border:0;background:none;color:var(--ng);font-size:18px;width:34px;height:34px;cursor:pointer}
+.tbl td.ix{color:var(--ink2);font-size:12px;width:24px;text-align:center}
 .lot{display:block;text-decoration:none;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--brand);border-radius:var(--radius-s);padding:12px 14px;margin-bottom:10px}
 .lot-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .lot-no{font-size:18px;font-weight:700;letter-spacing:.02em}
@@ -202,20 +216,11 @@ S2 Ra(nm), 0, +2, 0`;
 const DEFAULT_CONDS = `# 그룹 | 항목 | 단위
 건조 | 건조 온도 | ℃
 건조 | 건조 시간 | h
-온도 | 노즐 | ℃
-온도 | H1 | ℃
-온도 | H2 | ℃
-온도 | H3 | ℃
-온도 | H4 | ℃
-온도 | 금형 고정측 | ℃
-온도 | 금형 가동측 | ℃
+온도 | 노즐 온도 | ℃
+온도 | 금형 온도 | ℃
 사출 | 사출 속도 | mm/s
-사출 | 사출 압력 | MPa
-사출 | V-P 전환 | mm
 사출 | 보압 | MPa
 사출 | 보압 시간 | s
-사출 | 계량 위치 | mm
-사출 | 쿠션량 | mm
 사이클 | 냉각 시간 | s
 사이클 | 사이클 타임 | s`;
 
@@ -260,13 +265,15 @@ function specText(d){ const p=d.plus, m=d.minus; if(Math.abs(p)===Math.abs(m)&&p
 function yieldOf(l){ const g=l.good, n=l.ng; if(g!=null&&n!=null&&g+n>0) return g/(g+n)*100; if(g!=null&&l.shots) return g/l.shots*100; return null; }
 
 /* ---------- state & storage (IndexedDB, 이 기기에 저장) ---------- */
-const S = { lots:[], settings:null, filter:'all', q:'', persisted:null, conn:{}, syncState:'idle', syncing:false };
+const S = { lots:[], settings:null, fProject:'all', fStage:'all', q:'', persisted:null, conn:{}, syncState:'idle', syncing:false };
 const URLS = new Map();
 
 function cfg(){
   const s=S.settings||{};
-  const partsText=s.partsText??DEFAULT_PARTS, condsText=s.condsText??DEFAULT_CONDS, defectsText=s.defectsText??DEFAULT_DEFECTS;
-  return { prefix:s.prefix||'AGO', partsText, condsText, defectsText, parts:parseParts(partsText), conds:parseConds(condsText), defects:parseList(defectsText) };
+  const defectsText=s.defectsText??DEFAULT_DEFECTS;
+  const parts=Array.isArray(s.parts)?s.parts:parseParts(s.partsText??DEFAULT_PARTS);
+  const conds=Array.isArray(s.conds)?s.conds:parseConds(DEFAULT_CONDS);
+  return { defectsText, parts, conds, defects:parseList(defectsText) };
 }
 const IDB = {
   db:null,
@@ -450,37 +457,52 @@ function render(){
 /* ---------- list ---------- */
 const sorted = () => [...S.lots].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.lotNo||'').localeCompare(a.lotNo||''));
 function listView(){
-  const parts=[...new Set(S.lots.map(l=>`${l.project} ${l.part}`.trim()))].sort();
-  const chip=(v,label)=>`<button class="chip" data-act="filter" data-v="${esc(v)}" aria-pressed="${S.filter===v}">${esc(label)}</button>`;
   $('#main').innerHTML = `
     <input class="search" id="q" type="search" placeholder="LOT, 금형, 사출기, 메모 검색" value="${esc(S.q)}" aria-label="검색">
-    <div class="chips">${chip('all','전체')}${parts.map(p=>chip(p,p)).join('')}${STAGES.filter(s=>S.lots.some(l=>l.stage===s)).map(s=>chip('stage:'+s,s)).join('')}</div>
+    <div class="chips" id="pChips"></div><div class="chips sub" id="sChips"></div>
     <div id="listBody"></div>`;
   $('#q').addEventListener('input', e=>{ S.q=e.target.value; listBody(); });
   listBody();
 }
+function renderChips(){
+  const projects=[...new Set(S.lots.map(l=>l.project||'미지정'))].sort();
+  if(S.fProject!=='all' && !projects.includes(S.fProject)) S.fProject='all';
+  const inP=S.lots.filter(l=>S.fProject==='all'||(l.project||'미지정')===S.fProject);
+  const stages=STAGES.filter(st=>inP.some(l=>l.stage===st));
+  if(S.fStage!=='all' && !stages.includes(S.fStage)) S.fStage='all';
+  const chip=(k,v,label,n)=>`<button class="chip" data-act="filter" data-k="${k}" data-v="${esc(v)}" aria-pressed="${(k==='p'?S.fProject:S.fStage)===v}">${esc(label)}${n!=null?` <span style="opacity:.7">${n}</span>`:''}</button>`;
+  $('#pChips').innerHTML=chip('p','all','전체',S.lots.length)+projects.map(p=>chip('p',p,p,S.lots.filter(l=>(l.project||'미지정')===p).length)).join('');
+  $('#sChips').innerHTML=stages.length>1?chip('s','all','전 차수')+stages.map(st=>chip('s',st,st)).join(''):'';
+}
+function lotCard(l){
+  const dims=(l.dims||[]).filter(d=>d.value!=null); const ng=dims.filter(d=>judge(d)==='NG').length;
+  const y=yieldOf(l);
+  return `<a class="lot" href="#/lot/${encodeURIComponent(l.id)}">
+    <div class="lot-row"><span class="lot-no">${esc(l.lotNo)}</span><span class="lot-date">${esc(l.date||'')}</span></div>
+    <div class="lot-meta"><span class="pill stage">${esc(l.stage||'-')}</span><span class="pill">${esc(`${l.project||''} ${l.part||''}`.trim()||'부품 미지정')}</span>
+    ${l.status?`<span class="pill ${l.status==='보류'||l.status==='폐기'?'warn':''}">${esc(l.status)}</span>`:''}
+    ${y!=null?`<span class="pill">수율 ${fmt(Math.round(y*10)/10)}%</span>`:''}
+    ${dims.length?(ng?`<span class="pill ng">치수 NG ${ng}</span>`:`<span class="pill ok">치수 OK ${dims.length}</span>`):''}
+    ${(l.photos||[]).length?`<span class="pill">사진 ${l.photos.length}</span>`:''}</div></a>`;
+}
 function listBody(){
+  if(!$('#listBody')) return;
+  renderChips();
   const q=S.q.trim().toLowerCase();
   const items=sorted().filter(l=>{
-    if(S.filter.startsWith('stage:')){ if(l.stage!==S.filter.slice(6)) return false; }
-    else if(S.filter!=='all' && `${l.project} ${l.part}`.trim()!==S.filter) return false;
+    if(S.fProject!=='all' && (l.project||'미지정')!==S.fProject) return false;
+    if(S.fStage!=='all' && l.stage!==S.fStage) return false;
     if(!q) return true;
     return [l.lotNo,l.mold,l.machine,l.memo,l.materialLot,l.part,l.project].some(v=>String(v||'').toLowerCase().includes(q));
   });
   const el=$('#listBody');
   if(!S.lots.length){ el.innerHTML=`<div class="empty"><b>아직 기록된 LOT가 없습니다</b>사출을 마치면 아래 ‘새 LOT’로 조건과 수량을 남겨두세요.</div>`; return; }
   if(!items.length){ el.innerHTML=`<div class="empty"><b>조건에 맞는 LOT가 없습니다</b>검색어나 필터를 바꿔보세요.</div>`; return; }
-  el.innerHTML=`<div class="count">${items.length}건</div>`+items.map(l=>{
-    const dims=(l.dims||[]).filter(d=>d.value!=null); const ng=dims.filter(d=>judge(d)==='NG').length;
-    const y=yieldOf(l);
-    return `<a class="lot" href="#/lot/${encodeURIComponent(l.id)}">
-      <div class="lot-row"><span class="lot-no">${esc(l.lotNo)}</span><span class="lot-date">${esc(l.date||'')}</span></div>
-      <div class="lot-meta"><span class="pill stage">${esc(l.stage||'-')}</span><span class="pill">${esc(`${l.project||''} ${l.part||''}`.trim()||'부품 미지정')}</span>
-      ${l.status?`<span class="pill ${l.status==='보류'||l.status==='폐기'?'warn':''}">${esc(l.status)}</span>`:''}
-      ${y!=null?`<span class="pill">수율 ${fmt(Math.round(y*10)/10)}%</span>`:''}
-      ${dims.length?(ng?`<span class="pill ng">치수 NG ${ng}</span>`:`<span class="pill ok">치수 OK ${dims.length}</span>`):''}
-      ${(l.photos||[]).length?`<span class="pill">사진 ${l.photos.length}</span>`:''}</div></a>`;
-  }).join('');
+  // 전체 탭: 프로젝트별로, 프로젝트 탭: 부품별로 묶어서 표시
+  const keyOf = S.fProject==='all' ? (l=>l.project||'미지정') : (l=>l.part||'부품 미지정');
+  const groups=[...new Set(items.map(keyOf))].sort();
+  el.innerHTML=groups.map(g=>{ const g_items=items.filter(l=>keyOf(l)===g);
+    return `<div class="grp">${esc(g)}<span>${g_items.length}건</span></div>`+g_items.map(lotCard).join(''); }).join('');
 }
 
 /* ---------- detail ---------- */
@@ -524,10 +546,18 @@ function lotView(id){
 
 /* ---------- form ---------- */
 let F=null;
-function nextLotNo(date, excludeId){
-  const pre=`${cfg().prefix}-${(date||today()).replaceAll('-','').slice(2)}-`;
-  let max=0; S.lots.forEach(l=>{ if(l.id!==excludeId && (l.lotNo||'').startsWith(pre)){ const n=parseInt(l.lotNo.slice(pre.length),10); if(n>max) max=n; } });
-  return pre+String(max+1).padStart(3,'0');
+const lotToken = v => String(v||'').trim().replace(/\s+/g,'_').replace(/[^A-Za-z0-9_\-.]/g,'');
+const stageToken = st => /^[A-Za-z0-9]+$/.test(st||'') ? st : 'MP';
+function nextLotNo(date, project, stage, excludeId){
+  const pre=`${lotToken(project)||'LOT'}-${(date||today()).replaceAll('-','').slice(2)}-${stageToken(stage)}-`;
+  let max=0;
+  S.lots.forEach(l=>{ const no=l.lotNo||''; if(l.id!==excludeId && no.startsWith(pre)){ const rest=no.slice(pre.length); if(/^\d+$/.test(rest)) max=Math.max(max,parseInt(rest,10)); } });
+  return pre+String(max+1).padStart(2,'0');
+}
+function autoLotNo(){
+  if(!F || !F.auto) return;
+  const [project]=(F.key||'/').split('/');
+  $('#f_lotNo').value=nextLotNo($('#f_date').value, project, $('#f_stage').value, F.origId);
 }
 function formView(mode, id){
   const c=cfg();
@@ -554,11 +584,11 @@ function formView(mode, id){
   const groups=[...new Set(condList.map(x=>x.g))];
   const defectList=[...new Set([...c.defects, ...(l.defects||[])])];
   const inp=(n,label,v,type='text',extra='')=>`<div class="f"><label for="f_${n}">${label}</label><input id="f_${n}" name="${n}" type="${type}" value="${esc(v??'')}" ${extra}></div>`;
-  const lotNo = mode==='edit' ? l.lotNo : nextLotNo(l.date);
+  const lotNo = mode==='edit' ? l.lotNo : nextLotNo(l.date, l.project, l.stage);
 
   $('#main').innerHTML=`
-    <div class="tag"><small>LOT NO ${F.auto?'(사출일 기준 자동 부여, 탭해서 수정)':''}</small>
-      <div class="no"><input id="f_lotNo" name="lotNo" value="${esc(lotNo)}" autocapitalize="characters" spellcheck="false" aria-label="LOT 번호"></div></div>
+    <div class="tag"><small>LOT NO ${F.auto?'(프로젝트, 사출일, 차수로 자동 부여, 탭해서 수정)':''}</small>
+      <div class="no"><input id="f_lotNo" name="lotNo" value="${esc(lotNo)}" autocapitalize="off" spellcheck="false" aria-label="LOT 번호"></div></div>
 
     <section class="sec"><h2>기본 정보</h2><div class="grid">
       ${inp('date','사출일',l.date,'date')}
@@ -592,11 +622,12 @@ function formView(mode, id){
   renderDims(); renderPhotos(); updYield();
   const lotIn=$('#f_lotNo');
   lotIn.addEventListener('input',()=>{ F.auto=false; });
-  $('#f_date').addEventListener('change',e=>{ if(F.auto) lotIn.value=nextLotNo(e.target.value, F.origId); });
+  $('#f_date').addEventListener('change',autoLotNo);
+  $('#f_stage').addEventListener('change',autoLotNo);
   $('#f_part').addEventListener('change',e=>{
     captureDims(); F.key=e.target.value;
     const p=cfg().parts.find(p=>partKey(p)===F.key); if(p){ $('#f_customer').value=p.customer; $('#f_material').value=p.material; }
-    renderDims();
+    renderDims(); autoLotNo();
   });
   ['shots','good','ng'].forEach(n=>$(`#f_${n}`).addEventListener('input',updYield));
 }
@@ -655,7 +686,7 @@ function loadPrev(){
   toast(n?`${prev.lotNo} 조건 ${n}개를 불러왔습니다`:`${prev.lotNo}에 저장된 조건이 없습니다`);
 }
 async function saveForm(btn){
-  const lotNo=$('#f_lotNo').value.trim().toUpperCase();
+  const lotNo=$('#f_lotNo').value.trim();
   if(!lotNo){ toast('LOT 번호를 입력하세요'); return; }
   if(!ID_OK.test(lotNo)){ toast('LOT 번호에는 영문, 숫자, - _ . 만 쓸 수 있습니다'); return; }
   if(lotNo!==F.origId && S.lots.some(l=>l.id===lotNo)){ toast(`${lotNo}는 이미 있습니다`); return; }
@@ -674,18 +705,88 @@ async function saveForm(btn){
 }
 
 /* ---------- settings ---------- */
+let SE=null;
+const DIM_COLS=['name','nominal','plus','minus'], COND_COLS=['g','l','u'];
 function settingsView(){
   const c=cfg();
+  SE={ parts:c.parts.map(p=>({project:p.project,part:p.part,customer:p.customer,material:p.material,
+          dims:p.dims.map(d=>({name:d.name,nominal:fmt(d.nominal),plus:fmt(d.plus),minus:fmt(Math.abs(d.minus))}))})),
+       conds:c.conds.map(x=>({g:x.g,l:x.l,u:x.u})) };
   $('#main').innerHTML=`
-    <section class="sec"><h2>LOT 번호</h2><p class="help">형식: 접두어-YYMMDD-일련번호. 사출일마다 001부터 시작합니다.</p>
-      <div class="f"><label for="s_prefix">접두어</label><input id="s_prefix" value="${esc(c.prefix)}" autocapitalize="characters"></div>
-      <p class="note">예: ${esc(`${c.prefix}-${today().replaceAll('-','').slice(2)}-001`)}</p></section>
-    <section class="sec"><h2>부품과 치수 규격</h2><p class="help">[프로젝트 / 부품 / 고객 / 재료] 줄 아래에 ‘항목, 기준값, +공차, -공차’를 한 줄씩 적습니다. 상한만 있는 규격(PV 10㎛)은 ‘0, +10, 0’처럼 적습니다.</p>
-      <div class="f"><textarea class="code" id="s_parts" spellcheck="false" aria-label="부품과 치수 규격">${esc(c.partsText)}</textarea></div></section>
-    <section class="sec"><h2>성형 조건 항목</h2><p class="help">‘그룹 | 항목 | 단위’ 형식. 순서대로 입력 화면에 나옵니다.</p>
-      <div class="f"><textarea class="code" id="s_conds" spellcheck="false" aria-label="성형 조건 항목">${esc(c.condsText)}</textarea></div></section>
+    <section class="sec"><h2>LOT 번호</h2>
+      <p class="help">형식: <b>프로젝트명-YYMMDD-차수-순번</b>. 같은 프로젝트, 같은 사출일, 같은 차수 안에서 01부터 매깁니다.</p>
+      <p class="note">예: MBTi-${today().replaceAll('-','').slice(2)}-T0-01 &nbsp;/&nbsp; 양산은 MP로 표기됩니다. 프로젝트명의 공백은 _로 바뀌고, 한글과 특수문자는 LOT 번호에서 빠집니다.</p></section>
+    <section class="sec"><h2>부품과 치수 규격 <button class="btn small" data-act="se-addpart">+ 부품 추가</button></h2>
+      <p class="help">엑셀에서 항목, 기준값, +공차, -공차 네 칸을 복사해 표의 칸에 붙여넣으면 여러 줄이 한 번에 들어갑니다. -공차는 숫자만 적으면 됩니다(0.1 → -0.1). 상한만 있는 규격(PV 10㎛)은 기준값 0, +공차 10, -공차 0.</p>
+      <div id="sePartsBox"></div></section>
+    <section class="sec"><h2>성형 조건 항목 <button class="btn small" data-act="se-addcond">+ 항목 추가</button></h2>
+      <p class="help">표 순서대로 LOT 입력 화면에 나옵니다. 엑셀에서 그룹, 항목, 단위 세 칸을 붙여넣을 수 있습니다.</p>
+      <div id="seCondsBox"></div></section>
     <section class="sec"><h2>불량 유형</h2><div class="f"><textarea id="s_defects" aria-label="불량 유형">${esc(c.defectsText)}</textarea></div></section>
     <div class="btns"><button class="btn primary" data-act="savesettings">설정 저장</button></div>
+`+settingsRest();
+  renderSeParts(); renderSeConds();
+}
+function seCell(v,attrs,num){ return `<td><input ${attrs} value="${esc(v)}" ${num?'class="n" inputmode="decimal"':''} spellcheck="false" autocomplete="off"></td>`; }
+function renderSeParts(){
+  const box=$('#sePartsBox'); if(!box) return;
+  if(!SE.parts.length){ box.innerHTML='<p class="help">등록된 부품이 없습니다. ‘+ 부품 추가’를 누르세요.</p>'; return; }
+  const projects=[...new Set(SE.parts.map(p=>p.project||'(프로젝트 미입력)'))];
+  box.innerHTML=projects.map(pr=>`<div class="grp">${esc(pr)}<span>부품 ${SE.parts.filter(p=>(p.project||'(프로젝트 미입력)')===pr).length}종</span></div>`+
+    SE.parts.map((p,pi)=>({p,pi})).filter(({p})=>(p.project||'(프로젝트 미입력)')===pr).map(({p,pi})=>`
+    <div class="pblock">
+      <div class="grid">
+        ${['project:프로젝트','part:부품','customer:고객','material:재료'].map(x=>{const [k,lab]=x.split(':');return `<div class="f"><label>${lab}</label><input data-se="part" data-pi="${pi}" data-k="${k}" value="${esc(p[k]||'')}" autocomplete="off" spellcheck="false"></div>`;}).join('')}
+      </div>
+      <div class="scroll"><table class="tbl"><thead><tr><th></th><th style="width:40%">항목</th><th>기준값</th><th>+공차</th><th>-공차</th><th></th></tr></thead><tbody>
+        ${p.dims.map((d,di)=>`<tr><td class="ix">${di+1}</td>${DIM_COLS.map((k,ci)=>seCell(d[k],`data-se="dim" data-pi="${pi}" data-di="${di}" data-k="${k}" data-ci="${ci}"`,ci>0)).join('')}<td><button class="rm" data-act="se-deldim" data-pi="${pi}" data-di="${di}" aria-label="행 삭제">×</button></td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="btns" style="margin-top:10px"><button class="btn small" data-act="se-adddim" data-pi="${pi}">+ 행 추가</button><button class="btn small" data-act="se-duppart" data-pi="${pi}">부품 복제</button><button class="btn small danger" data-act="se-delpart" data-pi="${pi}">부품 삭제</button></div>
+    </div>`).join('')).join('');
+}
+function renderSeConds(){
+  const box=$('#seCondsBox'); if(!box) return;
+  box.innerHTML=`<div class="scroll"><table class="tbl" style="min-width:360px"><thead><tr><th></th><th>그룹</th><th style="width:42%">항목</th><th>단위</th><th></th></tr></thead><tbody>
+    ${SE.conds.map((x,i)=>`<tr><td class="ix">${i+1}</td>${COND_COLS.map((k,ci)=>seCell(x[k],`data-se="cond" data-i="${i}" data-k="${k}" data-ci="${ci}"`)).join('')}<td><button class="rm" data-act="se-delcond" data-i="${i}" aria-label="행 삭제">×</button></td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+document.addEventListener('input', e=>{
+  const t=e.target; if(!SE || !t.dataset || !t.dataset.se) return;
+  const d=t.dataset;
+  if(d.se==='part') SE.parts[+d.pi][d.k]=t.value;
+  else if(d.se==='dim') SE.parts[+d.pi].dims[+d.di][d.k]=t.value;
+  else if(d.se==='cond') SE.conds[+d.i][d.k]=t.value;
+});
+document.addEventListener('paste', e=>{
+  const t=e.target; if(!SE || !t.dataset || (t.dataset.se!=='dim' && t.dataset.se!=='cond')) return;
+  const text=(e.clipboardData||window.clipboardData)?.getData('text')||'';
+  if(!/[\t\n]/.test(text.trim())) return;          // 한 칸짜리는 그냥 붙여넣기
+  e.preventDefault();
+  const rows=text.replace(/\r/g,'').replace(/\n+$/,'').split('\n').map(r=>r.split('\t'));
+  const cols=t.dataset.se==='dim'?DIM_COLS:COND_COLS, ci=+t.dataset.ci;
+  const list=t.dataset.se==='dim'?SE.parts[+t.dataset.pi].dims:SE.conds;
+  let r0=+(t.dataset.se==='dim'?t.dataset.di:t.dataset.i);
+  rows.forEach((cells,ri)=>{
+    const idx=r0+ri; if(!list[idx]) list[idx]=Object.fromEntries(cols.map(k=>[k,'']));
+    cells.forEach((v,j)=>{ const k=cols[ci+j]; if(k) list[idx][k]=v.trim(); });
+  });
+  t.dataset.se==='dim'?renderSeParts():renderSeConds();
+  toast(`${rows.length}줄을 붙여넣었습니다`);
+});
+function seAction(a,b){
+  const pi=+b.dataset.pi;
+  if(a==='se-addpart'){ const last=SE.parts[SE.parts.length-1]; SE.parts.push({project:last?.project||'',part:'',customer:last?.customer||'',material:last?.material||'',dims:[{name:'',nominal:'',plus:'',minus:''}]}); renderSeParts(); }
+  else if(a==='se-duppart'){ const c=JSON.parse(JSON.stringify(SE.parts[pi])); c.part=c.part+' 복사'; SE.parts.splice(pi+1,0,c); renderSeParts(); }
+  else if(a==='se-delpart'){
+    if(!b.dataset.armed){ b.dataset.armed='1'; b.textContent='한 번 더 누르면 삭제'; setTimeout(()=>{ if(b.isConnected){ delete b.dataset.armed; b.textContent='부품 삭제'; } },3000); return; }
+    SE.parts.splice(pi,1); renderSeParts();
+  }
+  else if(a==='se-adddim'){ SE.parts[pi].dims.push({name:'',nominal:'',plus:'',minus:''}); renderSeParts(); }
+  else if(a==='se-deldim'){ SE.parts[pi].dims.splice(+b.dataset.di,1); renderSeParts(); }
+  else if(a==='se-addcond'){ const last=SE.conds[SE.conds.length-1]; SE.conds.push({g:last?.g||'',l:'',u:''}); renderSeConds(); }
+  else if(a==='se-delcond'){ SE.conds.splice(+b.dataset.i,1); renderSeConds(); }
+}
+function settingsRest(){ return `
     <section class="sec" style="margin-top:18px"><h2>PC 동기화</h2>
       <p class="help">회사 PC에서 동기화 서버를 켜두면, 사내 와이파이에 연결된 상태에서 앱을 열거나 저장할 때마다 PC와 자동으로 맞춰집니다. 밖에서 기록한 내용은 휴대폰에 있다가 다음 연결 때 올라갑니다.</p>
       <div class="grid">
@@ -701,15 +802,25 @@ function settingsView(){
         <button class="btn wide" data-act="backup">전체 백업 받기 (사진 포함 JSON)</button>
         <label class="btn wide" style="text-align:center">백업 파일로 복원<input type="file" accept=".json,application/json" hidden id="restoreIn"></label>
       </div>
-      <p class="note">다른 기기로 옮길 때: 백업 받기 → 파일 전달 → 새 기기에서 복원. 같은 LOT 번호는 백업 내용으로 덮어씁니다.</p></section>`;
-}
+      <p class="note">다른 기기로 옮길 때: 백업 받기 → 파일 전달 → 새 기기에서 복원. 같은 LOT 번호는 백업 내용으로 덮어씁니다.</p></section>`; }
 function bindSettings(){ const i=$('#restoreIn'); if(i) i.addEventListener('change',e=>{ const f=e.target.files[0]; if(f) importBackup(f); e.target.value=''; }); }
 async function saveSettings(btn){
-  const s={ prefix:($('#s_prefix').value.trim().toUpperCase()||'AGO'), partsText:$('#s_parts').value, condsText:$('#s_conds').value, defectsText:$('#s_defects').value };
-  if(!ID_OK.test(s.prefix)){ toast('접두어에는 영문, 숫자, - _ . 만 쓸 수 있습니다'); return; }
-  const n=parseParts(s.partsText).length;
+  const parts=[], errs=[];
+  SE.parts.forEach((p,i)=>{
+    const project=(p.project||'').trim(), part=(p.part||'').trim();
+    const dims=p.dims.filter(d=>(d.name||'').trim()||String(d.nominal||'').trim()).map(d=>({name:(d.name||'').trim(), nominal:num(d.nominal), plus:num(d.plus)??0, minus:-Math.abs(num(d.minus)??0)}));
+    if(!project && !part && !dims.length) return;
+    if(!project||!part) errs.push(`${i+1}번째 부품: 프로젝트와 부품명을 입력하세요`);
+    dims.forEach(d=>{ if(!d.name) errs.push(`${part||'부품'}: 항목명이 빈 행이 있습니다`); else if(d.nominal==null) errs.push(`${part} ${d.name}: 기준값이 숫자가 아닙니다`); });
+    parts.push({project, part, customer:(p.customer||'').trim(), material:(p.material||'').trim(), dims});
+  });
+  const keys=parts.map(partKey); const dup=keys.find((k,i)=>keys.indexOf(k)!==i); if(dup) errs.push(`같은 프로젝트/부품이 두 번 있습니다: ${dup}`);
+  if(errs.length){ toast(errs[0]); return; }
+  const conds=SE.conds.map(x=>({g:(x.g||'').trim()||'기타', l:(x.l||'').trim(), u:(x.u||'').trim()})).filter(x=>x.l);
+  const s={ parts, conds, defectsText:$('#s_defects').value };
   btn.disabled=true;
-  try{ await Store.saveSettings(s); toast(`설정을 저장했습니다 (부품 ${n}종)`); }catch(e){ toast('설정을 저장하지 못했습니다'); }
+  try{ await Store.saveSettings(s); toast(`설정을 저장했습니다 (부품 ${parts.length}종, 조건 ${conds.length}개)`); settingsView(); bindSettings(); }
+  catch(e){ toast('설정을 저장하지 못했습니다'); }
   btn.disabled=false;
 }
 async function exportCsv(){
@@ -732,7 +843,7 @@ document.addEventListener('click', async e=>{
   const b=e.target.closest('[data-act]'); if(!b) return;
   const a=b.dataset.act;
   if(a==='back'){ if(history.length>1) history.back(); else location.hash='#/'; }
-  else if(a==='filter'){ S.filter=b.dataset.v; $$('.chip[data-act="filter"]').forEach(c=>c.setAttribute('aria-pressed', c.dataset.v===S.filter)); listBody(); }
+  else if(a==='filter'){ if(b.dataset.k==='p'){ S.fProject=b.dataset.v; S.fStage='all'; } else S.fStage=b.dataset.v; listBody(); }
   else if(a==='defect'){ const v=b.dataset.v; F.defects.has(v)?F.defects.delete(v):F.defects.add(v); b.setAttribute('aria-pressed',F.defects.has(v)); }
   else if(a==='loadprev') loadPrev();
   else if(a==='save') saveForm(b);
@@ -743,6 +854,7 @@ document.addEventListener('click', async e=>{
     try{ await Store.deleteLot(b.dataset.id); toast('LOT를 삭제했습니다'); history.replaceState(null,'','#/'); render(); }catch(err){ toast('삭제하지 못했습니다'); }
   }
   else if(a==='savesettings') saveSettings(b);
+  else if(a.startsWith('se-')) seAction(a,b);
   else if(a==='csv') exportCsv();
   else if(a==='backup') exportBackup();
   else if(a==='sync'||a==='syncnow'){ if(!S.conn.url){ toast('설정에서 PC 서버 주소를 먼저 입력하세요'); return; } sync({silent:false}); }
